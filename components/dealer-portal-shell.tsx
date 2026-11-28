@@ -2,19 +2,28 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { LayoutDashboard, ShoppingCart, UserRound, BookOpen, ChevronDown, LogOut } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useDealerPortal } from '@/components/dealer-portal-context'
-
+import { useDealerAuth } from '@/hooks/useDealerAuth'
+import { LOGIN_PATH } from '@/context/DealerAuthContext'
 
 export function DealerPortalShell({ children }: { children: ReactNode }) {
-  const { hydrated, profile, totalQuantity } = useDealerPortal()
+  const { hydrated, totalQuantity } = useDealerPortal()
+  const { dealer, logout } = useDealerAuth()
+  const router = useRouter()
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const profileMenuRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
-  const initials = profile.ownerName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
-  const firstName = profile.ownerName.trim().split(/\s+/)[0] || 'Dealer'
+
+  // Real authenticated dealer identity (no hardcoded names).
+  const ownerName = dealer?.ownerName?.trim() || dealer?.name?.trim() || dealer?.businessName?.trim() || 'Dealer'
+  const email = dealer?.email ?? ''
+  const businessName = dealer?.businessName?.trim() || ''
+  const initials = ownerName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'D'
+  const firstName = ownerName.split(/\s+/)[0] || 'Dealer'
 
   const navLinks = [
     { href: '/dealer/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,6 +48,18 @@ export function DealerPortalShell({ children }: { children: ReactNode }) {
     }
   }, [profileMenuOpen])
 
+  async function handleLogout() {
+    if (isLoggingOut) return
+    setIsLoggingOut(true)
+    setProfileMenuOpen(false)
+    try {
+      await logout()
+    } finally {
+      setIsLoggingOut(false)
+      router.replace(LOGIN_PATH)
+    }
+  }
+
   if (!hydrated) return <main className="dealer-portal dealer-portal-loading" aria-live="polite">Loading your dealer workspace…</main>
 
   return <main className="dealer-portal">
@@ -51,9 +72,9 @@ export function DealerPortalShell({ children }: { children: ReactNode }) {
               <span className="portal-avatar">{initials}</span><ChevronDown size={14} aria-hidden="true"/>
             </button>
             {profileMenuOpen && <div className="portal-profile-dropdown" role="menu" aria-label="Dealer account">
-              <div className="portal-profile-dropdown-identity"><strong>{profile.ownerName}</strong><span>{profile.email}</span></div>
+              <div className="portal-profile-dropdown-identity"><strong>{ownerName}</strong>{businessName && <span>{businessName}</span>}<span>{email}</span></div>
               <Link href="/dealer/dashboard" role="menuitem" onClick={() => setProfileMenuOpen(false)}><LayoutDashboard size={15}/> Dashboard</Link>
-              <button className="portal-logout-button" role="menuitem" onClick={() => { setProfileMenuOpen(false); window.location.href = '/dealer/login' }}><LogOut size={15}/> Logout</button>
+              <button className="portal-logout-button" role="menuitem" onClick={handleLogout} disabled={isLoggingOut}><LogOut size={15}/> {isLoggingOut ? 'Logging out…' : 'Logout'}</button>
             </div>}
           </div>
         </header>

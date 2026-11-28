@@ -18,8 +18,8 @@ export function DealerSignupPage() {
     >
       <p className="dealer-page-intro">
         Register your business with RK Tiles &amp; Sanitary. New dealer accounts start as <strong>pending approval</strong>;
-        our team reviews your details before granting access to the Dealer Portal. This form is a preview and does not
-        submit anything yet.
+        our team reviews your details before granting access to the Dealer Portal. You will be able to sign in once your
+        account is approved.
       </p>
       <DealerSignupForm />
       <p className="dealer-page-footnote">

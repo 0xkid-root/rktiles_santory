@@ -1,28 +1,32 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useId, useState, type FormEvent } from 'react'
 import { ArrowRight, Eye, EyeOff } from 'lucide-react'
 import { emptyDealerLoginValues, validateDealerLogin, type DealerLoginErrors } from '@/features/dealer/login/login.validation'
+import { DealerAccessDeniedError } from '@/types/auth.types'
+import { getApiErrorMessage } from '@/utils/error.utils'
+import { useDealerAuth } from '@/hooks/useDealerAuth'
+import { DASHBOARD_PATH } from '@/context/DealerAuthContext'
 import type { DealerLoginValues } from '@/types/dealer.types'
 
-/**
- * Dealer login form (Phase 1). Required + email validation, password visibility toggle,
- * submit loading state, accessible inputs, signup navigation.
- * NOT connected to any API and does NOT perform fake authentication; submitting shows a preview notice.
- */
+/** Dealer login form connected to real `/auth/dealer/login`. No token handling; HTTP-only cookie. */
 export function DealerLoginForm() {
   const formId = useId()
+  const router = useRouter()
+  const { login } = useDealerAuth()
   const [values, setValues] = useState<DealerLoginValues>(emptyDealerLoginValues)
   const [errors, setErrors] = useState<DealerLoginErrors>({})
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [notice, setNotice] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
 
   const emailId = `${formId}-email`
   const passwordId = `${formId}-password`
   const emailErrorId = `${formId}-email-error`
   const passwordErrorId = `${formId}-password-error`
+  const formErrorId = `${formId}-form-error`
 
   function update(field: keyof DealerLoginValues, value: string) {
     setValues((current) => ({ ...current, [field]: value }))
@@ -31,7 +35,7 @@ export function DealerLoginForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setNotice('')
+    setFormError(null)
 
     const nextErrors = validateDealerLogin(values)
     setErrors(nextErrors)
@@ -39,9 +43,10 @@ export function DealerLoginForm() {
 
     setIsSubmitting(true)
     try {
-      // Phase 1: no backend authentication. Real `dealerLogin()` is wired in Phase 2.
-      await Promise.resolve()
-      setNotice('Dealer authentication is not connected in this preview. No sign-in was attempted.')
+      await login({ email: values.email.trim(), password: values.password })
+      router.replace(DASHBOARD_PATH)
+    } catch (err) {
+      setFormError(err instanceof DealerAccessDeniedError ? err.message : getApiErrorMessage(err))
     } finally {
       setIsSubmitting(false)
     }
@@ -93,7 +98,6 @@ export function DealerLoginForm() {
             aria-label={showPassword ? 'Hide password' : 'Show password'}
             aria-pressed={showPassword}
             onClick={() => setShowPassword((open) => !open)}
-           
           >
             {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
           </button>
@@ -109,9 +113,9 @@ export function DealerLoginForm() {
         {isSubmitting ? 'Signing in…' : 'Sign in'} <ArrowRight size={16} aria-hidden="true" />
       </button>
 
-      {notice && (
-        <p className="form-notice" role="status">
-          {notice}
+      {formError && (
+        <p className="form-notice form-notice-error" id={formErrorId} role="alert">
+          {formError}
         </p>
       )}
 
@@ -121,4 +125,3 @@ export function DealerLoginForm() {
     </form>
   )
 }
-

@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { categories } from '@/lib/categories'
 import { products } from '@/lib/products'
+import { useDealerAuth } from '@/hooks/useDealerAuth'
+import type { Dealer } from '@/types/dealer.types'
 
 const STORAGE_KEY = 'rk-dealer-portal-v1'
 
@@ -25,23 +27,24 @@ export type DealerProfile = {
   pinCode: string
   country: string
 }
+// No hardcoded demo identity. Real authenticated dealer data is synced in DealerPortalProvider.
 const initialProfile: DealerProfile = {
-  ownerName: 'Ananya Sharma',
-  businessName: 'Sharma Tiles & Bath Studio',
-  dealerId: 'RKD-1042',
-  approvalStatus: 'Approved',
-  registeredAt: '18 March 2025',
-  email: 'ananya@sharmatiles.in',
-  mobile: '+91 98765 43210',
-  alternatePhone: '+91 522 410 2840',
-  businessType: 'Retail showroom',
-  gstNumber: '09ABCDE1234F1Z5',
-  verificationStatus: 'Verified',
-  address: '42 Hazratganj Road',
-  city: 'Lucknow',
-  state: 'Uttar Pradesh',
-  pinCode: '226001',
-  country: 'India',
+  ownerName: '',
+  businessName: '',
+  dealerId: '',
+  approvalStatus: '',
+  registeredAt: '',
+  email: '',
+  mobile: '',
+  alternatePhone: '',
+  businessType: '',
+  gstNumber: '',
+  verificationStatus: '',
+  address: '',
+  city: '',
+  state: '',
+  pinCode: '',
+  country: '',
 }
 
 const initialState = { cart: [] as CartLine[], profile: initialProfile }
@@ -102,14 +105,44 @@ function readStoredState() {
   }
 }
 
+function mapDealerToProfile(dealer: Dealer): Partial<DealerProfile> {
+  const address = dealer.address ?? {}
+  return {
+    ownerName: dealer.ownerName ?? dealer.name ?? '',
+    businessName: dealer.businessName ?? '',
+    dealerId: dealer.dealerId ?? '',
+    approvalStatus: dealer.approvalStatus ?? '',
+    registeredAt: dealer.createdAt ?? '',
+    email: dealer.email ?? '',
+    mobile: dealer.mobile ?? '',
+    alternatePhone: dealer.alternateMobile ?? '',
+    businessType: dealer.businessType ?? '',
+    gstNumber: dealer.gstNumber ?? '',
+    verificationStatus: dealer.verificationStatus ?? '',
+    address: address.street ?? '',
+    city: address.city ?? '',
+    state: address.state ?? '',
+    pinCode: address.pincode ?? '',
+    country: address.country ?? '',
+  }
+}
+
 export function DealerPortalProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState(initialState)
   const [hydrated, setHydrated] = useState(false)
+  const { dealer } = useDealerAuth()
 
   useEffect(() => {
     setState(readStoredState())
     setHydrated(true)
   }, [])
+
+  // Sync preview profile from the real authenticated dealer (no hardcoded identity). Profile API is out of scope.
+  useEffect(() => {
+    if (!dealer) return
+    const mapped = mapDealerToProfile(dealer)
+    setState((current) => ({ ...current, profile: { ...current.profile, ...mapped } }))
+  }, [dealer])
 
   useEffect(() => {
     if (!hydrated) return

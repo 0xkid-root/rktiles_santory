@@ -8,7 +8,6 @@ export type DealerSignupField =
 export type DealerSignupErrors = Partial<Record<DealerSignupField, string>>;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DIGITS_PATTERN = /^\d+$/;
 
 export const emptyDealerSignupValues: DealerSignupValues = {
   ownerName: "",
@@ -24,9 +23,10 @@ export const emptyDealerSignupValues: DealerSignupValues = {
 };
 
 /**
- * Client-side validation for the dealer signup form (Phase 1, no API).
- * Mirrors backend rules: businessName >= 2, ownerName >= 2, valid email, password >= 6, mobile >= 10,
- * plus UI-only confirm-password match. Optional fields are validated only when provided.
+ * Client-side validation for the dealer signup form (UX; backend remains authoritative).
+ * Mirrors backend rules: businessName >= 2, ownerName >= 2, valid email, password >= 6, mobile >= 10 characters,
+ * plus UI-only confirm-password match. Optional fields are validated only when provided. Mobile/PIN are not digit-only
+ * (backend does not require it); required address subfields are checked.
  */
 export function validateDealerSignup(values: DealerSignupValues): DealerSignupErrors {
   const errors: DealerSignupErrors = {};
@@ -37,19 +37,13 @@ export function validateDealerSignup(values: DealerSignupValues): DealerSignupEr
   else if (!EMAIL_PATTERN.test(values.email.trim())) errors.email = "Enter a valid email address.";
   if (values.password.length < 6) errors.password = "Password must be at least 6 characters.";
   if (values.confirmPassword !== values.password) errors.confirmPassword = "Passwords do not match.";
-  if (values.mobile.trim().length < 10) errors.mobile = "Enter a valid mobile number (minimum 10 digits).";
-  else if (!DIGITS_PATTERN.test(values.mobile.trim())) errors.mobile = "Mobile number must contain digits only.";
-
-  if (values.alternateMobile.trim() && !DIGITS_PATTERN.test(values.alternateMobile.trim())) {
-    errors.alternateMobile = "Alternate mobile number must contain digits only.";
-  }
+  if (values.mobile.trim().length < 10) errors.mobile = "Enter a valid mobile number (minimum 10 characters).";
 
   const address = values.address;
   if (!address.street.trim()) errors["address.street"] = "Street is required.";
   if (!address.city.trim()) errors["address.city"] = "City is required.";
   if (!address.state.trim()) errors["address.state"] = "State is required.";
   if (!address.pincode.trim()) errors["address.pincode"] = "PIN code is required.";
-  else if (!DIGITS_PATTERN.test(address.pincode.trim())) errors["address.pincode"] = "PIN code must contain digits only.";
   if (!address.country.trim()) errors["address.country"] = "Country is required.";
 
   return errors;

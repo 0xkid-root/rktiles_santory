@@ -4,11 +4,14 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight, ArrowUpRight, Box, Layers3, ShoppingBag, ShoppingCart } from 'lucide-react'
 import { useDealerPortal } from '@/components/dealer-portal-context'
+import { useDealerAuth } from '@/hooks/useDealerAuth'
 
 /** Main dashboard overview: heading, activity metrics, My Cart preview, category mix. */
 export function DealerOverview() {
-  const { profile, uniqueProducts, totalQuantity, categoryCount, categorySummary, cartProducts } = useDealerPortal()
-  const firstName = profile.ownerName.trim().split(/\s+/)[0] || 'Dealer'
+  const { uniqueProducts, totalQuantity, categoryCount, categorySummary, cartProducts } = useDealerPortal()
+  const { dealer } = useDealerAuth()
+  const ownerName = dealer?.ownerName?.trim() || dealer?.name?.trim() || dealer?.businessName?.trim() || 'Dealer'
+  const firstName = ownerName.split(/\s+/)[0] || 'Dealer'
 
   const metrics = [
     { label: 'Unique products in My Cart', value: uniqueProducts, icon: ShoppingBag },

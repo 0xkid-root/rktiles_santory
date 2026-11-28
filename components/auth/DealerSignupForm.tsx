@@ -1,30 +1,57 @@
 'use client'
 
+import Link from 'next/link'
 import { useId, useState, type FormEvent } from 'react'
-import { ArrowRight, Eye, EyeOff } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import {
   emptyDealerSignupValues,
   validateDealerSignup,
   type DealerSignupErrors,
   type DealerSignupField,
 } from '@/features/dealer/signup/signup.validation'
+import { normalizeApiError, getApiErrorMessage } from '@/utils/error.utils'
+import { useDealerAuth } from '@/hooks/useDealerAuth'
 import type { DealerAddress, DealerSignupValues } from '@/types/dealer.types'
+import type { DealerSignupPayload } from '@/types/auth.types'
 
 const BUSINESS_TYPES = ['Retailer', 'Wholesaler', 'Distributor', 'Contractor', 'Builder', 'Architect', 'Other']
+const PENDING_MESSAGE =
+  'Your dealer registration has been submitted successfully. Your account is currently pending approval by the RK Tiles team. You will be able to sign in once your account has been approved.'
 
-/**
- * Dealer account registration form (Phase 1). Grouped sections, accessible labels, required
- * indicators, per-field + summary error feedback, confirm-password check, password toggles,
- * submit loading state. NOT connected to any API; no fake signup success is shown.
- */
+/** Map form values to backend payload; drop UI-only confirmPassword; omit empty optional fields. */
+function buildSignupPayload(values: DealerSignupValues): DealerSignupPayload {
+  const address = {
+    street: values.address.street.trim(),
+    city: values.address.city.trim(),
+    state: values.address.state.trim(),
+    pincode: values.address.pincode.trim(),
+    country: values.address.country.trim(),
+  }
+  const payload: DealerSignupPayload = {
+    businessName: values.businessName.trim(),
+    ownerName: values.ownerName.trim(),
+    email: values.email.trim().toLowerCase(),
+    password: values.password,
+    mobile: values.mobile.trim(),
+    address,
+  }
+  if (values.alternateMobile.trim()) payload.alternateMobile = values.alternateMobile.trim()
+  if (values.gstNumber.trim()) payload.gstNumber = values.gstNumber.trim()
+  if (values.businessType.trim()) payload.businessType = values.businessType.trim()
+  return payload
+}
+
+/** Dealer account registration form connected to real `/auth/dealer/signup`. Never grants portal access. */
 export function DealerSignupForm() {
   const formId = useId()
+  const { signup } = useDealerAuth()
   const [values, setValues] = useState<DealerSignupValues>(emptyDealerSignupValues)
   const [errors, setErrors] = useState<DealerSignupErrors>({})
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [notice, setNotice] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
+  const [pending, setPending] = useState<string | null>(null)
 
   const id = (field: string) => `${formId}-${field}`
   const errorId = (field: string) => `${formId}-${field}-error`
@@ -45,7 +72,7 @@ export function DealerSignupForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setNotice('')
+    setFormError(null)
 
     const nextErrors = validateDealerSignup(values)
     setErrors(nextErrors)
@@ -53,12 +80,40 @@ export function DealerSignupForm() {
 
     setIsSubmitting(true)
     try {
-      // Phase 1: no backend signup. Real `dealerSignup()` is wired in Phase 2.
-      await Promise.resolve()
-      setNotice('Dealer signup is not connected in this preview. No account was created.')
+      const outcome = await signup(buildSignupPayload(values))
+      console.log(outcome, "hsjdjhdj")
+      setPending(outcome.message || PENDING_MESSAGE)
+    } catch (err) {
+      const apiError = normalizeApiError(err)
+      // Surface backend field-level validation errors.
+      if (apiError.fieldErrors.length) {
+        const backendErrors: DealerSignupErrors = {}
+        for (const fe of apiError.fieldErrors) {
+          const key = fe.field.replace(/^address\./, 'address.') as DealerSignupField
+          if (key in emptyDealerSignupValues || key.startsWith('address.')) backendErrors[key] = fe.message
+        }
+        setErrors((current) => ({ ...current, ...backendErrors }))
+      }
+      setFormError(getApiErrorMessage(err))
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (pending) {
+    return (
+      <div className="dealer-form dealer-signup-pending" role="status" aria-live="polite">
+        <CheckCircle2 size={28} aria-hidden="true" className="dealer-pending-icon" />
+        <h2>Registration submitted</h2>
+        <p className="dealer-pending-message">{pending}</p>
+        <p className="dealer-pending-note">
+          Your account is pending admin approval. You will not have access to the Dealer Portal until RK Tiles approves your registration.
+        </p>
+        <Link className="button button-dark" href="/dealer/login">
+          Go to dealer login <ArrowRight size={16} aria-hidden="true" />
+        </Link>
+      </div>
+    )
   }
 
   return (
@@ -69,74 +124,33 @@ export function DealerSignupForm() {
 
       <fieldset className="dealer-form-section dealer-form-wide" disabled={isSubmitting}>
         <legend>Owner / account details</legend>
-
         <div className="dealer-form-grid">
           <label htmlFor={id('ownerName')}>
             Owner name <span className="dealer-required" aria-hidden="true">*</span>
-            <input
-              id={id('ownerName')}
-              name="ownerName"
-              type="text"
-              autoComplete="name"
-              required
-              minLength={2}
-              value={values.ownerName}
-              onChange={(event) => update('ownerName', event.target.value)}
-              aria-invalid={Boolean(error('ownerName'))}
-              aria-describedby={error('ownerName') ? errorId('ownerName') : undefined}
-            />
+            <input id={id('ownerName')} name="ownerName" type="text" autoComplete="name" required minLength={2} value={values.ownerName}
+              onChange={(event) => update('ownerName', event.target.value)} aria-invalid={Boolean(error('ownerName'))} aria-describedby={error('ownerName') ? errorId('ownerName') : undefined} />
             {error('ownerName') && <span className="dealer-field-error" id={errorId('ownerName')} role="alert">{error('ownerName')}</span>}
           </label>
 
           <label htmlFor={id('businessName')}>
             Business name <span className="dealer-required" aria-hidden="true">*</span>
-            <input
-              id={id('businessName')}
-              name="businessName"
-              type="text"
-              autoComplete="organization"
-              required
-              minLength={2}
-              value={values.businessName}
-              onChange={(event) => update('businessName', event.target.value)}
-              aria-invalid={Boolean(error('businessName'))}
-              aria-describedby={error('businessName') ? errorId('businessName') : undefined}
-            />
+            <input id={id('businessName')} name="businessName" type="text" autoComplete="organization" required minLength={2} value={values.businessName}
+              onChange={(event) => update('businessName', event.target.value)} aria-invalid={Boolean(error('businessName'))} aria-describedby={error('businessName') ? errorId('businessName') : undefined} />
             {error('businessName') && <span className="dealer-field-error" id={errorId('businessName')} role="alert">{error('businessName')}</span>}
           </label>
 
           <label className="dealer-form-wide" htmlFor={id('email')}>
             Email address <span className="dealer-required" aria-hidden="true">*</span>
-            <input
-              id={id('email')}
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              placeholder="name@business.com"
-              value={values.email}
-              onChange={(event) => update('email', event.target.value)}
-              aria-invalid={Boolean(error('email'))}
-              aria-describedby={error('email') ? errorId('email') : undefined}
-            />
+            <input id={id('email')} name="email" type="email" autoComplete="email" required placeholder="name@business.com" value={values.email}
+              onChange={(event) => update('email', event.target.value)} aria-invalid={Boolean(error('email'))} aria-describedby={error('email') ? errorId('email') : undefined} />
             {error('email') && <span className="dealer-field-error" id={errorId('email')} role="alert">{error('email')}</span>}
           </label>
 
           <label htmlFor={id('password')}>
             Password <span className="dealer-required" aria-hidden="true">*</span>
             <span className="dealer-password-field">
-              <input
-                id={id('password')}
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                required
-                minLength={6}
-                value={values.password}
-                onChange={(event) => update('password', event.target.value)}
-                aria-invalid={Boolean(error('password'))}
-                aria-describedby={error('password') ? errorId('password') : `${id('password')}-hint`}
-              />
+              <input id={id('password')} name="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={6} value={values.password}
+                onChange={(event) => update('password', event.target.value)} aria-invalid={Boolean(error('password'))} aria-describedby={error('password') ? errorId('password') : `${id('password')}-hint`} />
               <button type="button" className="dealer-password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((open) => !open)}>
                 {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
@@ -148,17 +162,8 @@ export function DealerSignupForm() {
           <label htmlFor={id('confirmPassword')}>
             Confirm password <span className="dealer-required" aria-hidden="true">*</span>
             <span className="dealer-password-field">
-              <input
-                id={id('confirmPassword')}
-                name="confirmPassword"
-                type={showConfirmPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                required
-                value={values.confirmPassword}
-                onChange={(event) => update('confirmPassword', event.target.value)}
-                aria-invalid={Boolean(error('confirmPassword'))}
-                aria-describedby={error('confirmPassword') ? errorId('confirmPassword') : undefined}
-              />
+              <input id={id('confirmPassword')} name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" required value={values.confirmPassword}
+                onChange={(event) => update('confirmPassword', event.target.value)} aria-invalid={Boolean(error('confirmPassword'))} aria-describedby={error('confirmPassword') ? errorId('confirmPassword') : undefined} />
               <button type="button" className="dealer-password-toggle" aria-label={showConfirmPassword ? 'Hide password' : 'Show password'} aria-pressed={showConfirmPassword} onClick={() => setShowConfirmPassword((open) => !open)}>
                 {showConfirmPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
@@ -168,36 +173,15 @@ export function DealerSignupForm() {
 
           <label htmlFor={id('mobile')}>
             Mobile number <span className="dealer-required" aria-hidden="true">*</span>
-            <input
-              id={id('mobile')}
-              name="mobile"
-              type="tel"
-              autoComplete="tel"
-              required
-              minLength={10}
-              inputMode="numeric"
-              placeholder="9876543210"
-              value={values.mobile}
-              onChange={(event) => update('mobile', event.target.value)}
-              aria-invalid={Boolean(error('mobile'))}
-              aria-describedby={error('mobile') ? errorId('mobile') : undefined}
-            />
+            <input id={id('mobile')} name="mobile" type="tel" autoComplete="tel" required minLength={10} inputMode="numeric" placeholder="9876543210" value={values.mobile}
+              onChange={(event) => update('mobile', event.target.value)} aria-invalid={Boolean(error('mobile'))} aria-describedby={error('mobile') ? errorId('mobile') : undefined} />
             {error('mobile') && <span className="dealer-field-error" id={errorId('mobile')} role="alert">{error('mobile')}</span>}
           </label>
 
           <label htmlFor={id('alternateMobile')}>
             Alternate mobile <span className="dealer-optional">(optional)</span>
-            <input
-              id={id('alternateMobile')}
-              name="alternateMobile"
-              type="tel"
-              autoComplete="tel"
-              inputMode="numeric"
-              value={values.alternateMobile}
-              onChange={(event) => update('alternateMobile', event.target.value)}
-              aria-invalid={Boolean(error('alternateMobile'))}
-              aria-describedby={error('alternateMobile') ? errorId('alternateMobile') : undefined}
-            />
+            <input id={id('alternateMobile')} name="alternateMobile" type="tel" autoComplete="tel" inputMode="numeric" value={values.alternateMobile}
+              onChange={(event) => update('alternateMobile', event.target.value)} aria-invalid={Boolean(error('alternateMobile'))} aria-describedby={error('alternateMobile') ? errorId('alternateMobile') : undefined} />
             {error('alternateMobile') && <span className="dealer-field-error" id={errorId('alternateMobile')} role="alert">{error('alternateMobile')}</span>}
           </label>
         </div>
@@ -205,32 +189,16 @@ export function DealerSignupForm() {
 
       <fieldset className="dealer-form-section dealer-form-wide" disabled={isSubmitting}>
         <legend>Business details</legend>
-
         <div className="dealer-form-grid">
           <label htmlFor={id('gstNumber')}>
             GST number <span className="dealer-optional">(optional)</span>
-            <input
-              id={id('gstNumber')}
-              name="gstNumber"
-              type="text"
-              autoComplete="off"
-              value={values.gstNumber}
-              onChange={(event) => update('gstNumber', event.target.value)}
-            />
+            <input id={id('gstNumber')} name="gstNumber" type="text" autoComplete="off" value={values.gstNumber} onChange={(event) => update('gstNumber', event.target.value)} />
           </label>
-
           <label htmlFor={id('businessType')}>
             Business type <span className="dealer-optional">(optional)</span>
-            <select
-              id={id('businessType')}
-              name="businessType"
-              value={values.businessType}
-              onChange={(event) => update('businessType', event.target.value)}
-            >
+            <select id={id('businessType')} name="businessType" value={values.businessType} onChange={(event) => update('businessType', event.target.value)}>
               <option value="">Select business type</option>
-              {BUSINESS_TYPES.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
+              {BUSINESS_TYPES.map((type) => (<option key={type} value={type}>{type}</option>))}
             </select>
           </label>
         </div>
@@ -238,86 +206,35 @@ export function DealerSignupForm() {
 
       <fieldset className="dealer-form-section dealer-form-wide" disabled={isSubmitting}>
         <legend>Address details</legend>
-
         <div className="dealer-form-grid">
           <label className="dealer-form-wide" htmlFor={id('address.street')}>
             Street <span className="dealer-required" aria-hidden="true">*</span>
-            <input
-              id={id('address.street')}
-              name="address.street"
-              type="text"
-              autoComplete="address-line1"
-              required
-              value={values.address.street}
-              onChange={(event) => updateAddress('street', event.target.value)}
-              aria-invalid={Boolean(error('address.street'))}
-              aria-describedby={error('address.street') ? errorId('address.street') : undefined}
-            />
+            <input id={id('address.street')} name="address.street" type="text" autoComplete="address-line1" required value={values.address.street}
+              onChange={(event) => updateAddress('street', event.target.value)} aria-invalid={Boolean(error('address.street'))} aria-describedby={error('address.street') ? errorId('address.street') : undefined} />
             {error('address.street') && <span className="dealer-field-error" id={errorId('address.street')} role="alert">{error('address.street')}</span>}
           </label>
-
           <label htmlFor={id('address.city')}>
             City <span className="dealer-required" aria-hidden="true">*</span>
-            <input
-              id={id('address.city')}
-              name="address.city"
-              type="text"
-              autoComplete="address-level2"
-              required
-              value={values.address.city}
-              onChange={(event) => updateAddress('city', event.target.value)}
-              aria-invalid={Boolean(error('address.city'))}
-              aria-describedby={error('address.city') ? errorId('address.city') : undefined}
-            />
+            <input id={id('address.city')} name="address.city" type="text" autoComplete="address-level2" required value={values.address.city}
+              onChange={(event) => updateAddress('city', event.target.value)} aria-invalid={Boolean(error('address.city'))} aria-describedby={error('address.city') ? errorId('address.city') : undefined} />
             {error('address.city') && <span className="dealer-field-error" id={errorId('address.city')} role="alert">{error('address.city')}</span>}
           </label>
-
           <label htmlFor={id('address.state')}>
             State <span className="dealer-required" aria-hidden="true">*</span>
-            <input
-              id={id('address.state')}
-              name="address.state"
-              type="text"
-              autoComplete="address-level1"
-              required
-              value={values.address.state}
-              onChange={(event) => updateAddress('state', event.target.value)}
-              aria-invalid={Boolean(error('address.state'))}
-              aria-describedby={error('address.state') ? errorId('address.state') : undefined}
-            />
+            <input id={id('address.state')} name="address.state" type="text" autoComplete="address-level1" required value={values.address.state}
+              onChange={(event) => updateAddress('state', event.target.value)} aria-invalid={Boolean(error('address.state'))} aria-describedby={error('address.state') ? errorId('address.state') : undefined} />
             {error('address.state') && <span className="dealer-field-error" id={errorId('address.state')} role="alert">{error('address.state')}</span>}
           </label>
-
           <label htmlFor={id('address.pincode')}>
             PIN code <span className="dealer-required" aria-hidden="true">*</span>
-            <input
-              id={id('address.pincode')}
-              name="address.pincode"
-              type="text"
-              autoComplete="postal-code"
-              inputMode="numeric"
-              required
-              value={values.address.pincode}
-              onChange={(event) => updateAddress('pincode', event.target.value)}
-              aria-invalid={Boolean(error('address.pincode'))}
-              aria-describedby={error('address.pincode') ? errorId('address.pincode') : undefined}
-            />
+            <input id={id('address.pincode')} name="address.pincode" type="text" autoComplete="postal-code" inputMode="numeric" required value={values.address.pincode}
+              onChange={(event) => updateAddress('pincode', event.target.value)} aria-invalid={Boolean(error('address.pincode'))} aria-describedby={error('address.pincode') ? errorId('address.pincode') : undefined} />
             {error('address.pincode') && <span className="dealer-field-error" id={errorId('address.pincode')} role="alert">{error('address.pincode')}</span>}
           </label>
-
           <label htmlFor={id('address.country')}>
             Country <span className="dealer-required" aria-hidden="true">*</span>
-            <input
-              id={id('address.country')}
-              name="address.country"
-              type="text"
-              autoComplete="country-name"
-              required
-              value={values.address.country}
-              onChange={(event) => updateAddress('country', event.target.value)}
-              aria-invalid={Boolean(error('address.country'))}
-              aria-describedby={error('address.country') ? errorId('address.country') : undefined}
-            />
+            <input id={id('address.country')} name="address.country" type="text" autoComplete="country-name" required value={values.address.country}
+              onChange={(event) => updateAddress('country', event.target.value)} aria-invalid={Boolean(error('address.country'))} aria-describedby={error('address.country') ? errorId('address.country') : undefined} />
             {error('address.country') && <span className="dealer-field-error" id={errorId('address.country')} role="alert">{error('address.country')}</span>}
           </label>
         </div>
@@ -327,12 +244,9 @@ export function DealerSignupForm() {
         {isSubmitting ? 'Submitting…' : 'Create dealer account'} <ArrowRight size={16} aria-hidden="true" />
       </button>
 
-      {notice && (
-        <p className="form-notice" role="status">
-          {notice}
-        </p>
+      {formError && (
+        <p className="form-notice form-notice-error" role="alert">{formError}</p>
       )}
     </form>
   )
 }
-

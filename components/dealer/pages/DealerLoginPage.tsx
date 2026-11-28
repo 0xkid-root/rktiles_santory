@@ -18,22 +18,12 @@ export function DealerLoginPage() {
       }
     >
       <p className="dealer-page-intro">
-        A dedicated space for RK Tiles &amp; Sanitary trade partners. Dealer accounts are not active yet; this sign-in
-        form is a visual preview only.
+        A dedicated space for RK Tiles &amp; Sanitary trade partners. Sign in with your approved dealer account. Only
+        approved, active dealers can access the Dealer Portal.
       </p>
       <DealerLoginForm />
-      <p className="dealer-page-footnote">
-        Preview the mock dealer workspace:{' '}
-        <Link href="/dealer/dashboard">
-          Open demo dashboard <ArrowUpRight size={14} aria-hidden="true" />
-        </Link>
-      </p>
-      <p className="dealer-page-footnote">
-        Not a partner yet?{' '}
-        <Link href="/dealer/signup">
-          Create a dealer account <ArrowUpRight size={14} aria-hidden="true" />
-        </Link>
-      </p>
+
+
     </DealerShell>
   )
 }
