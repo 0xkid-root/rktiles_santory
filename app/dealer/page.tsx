@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { DealerInterestPage } from '@/components/dealer-pages'
+import { DealerInterestPage } from '@/components/dealer/pages/DealerInterestPage'
 
 export const metadata: Metadata = {
   title: 'Become a Dealer | RK Tiles & Sanitary',
